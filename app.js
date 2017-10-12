@@ -8,6 +8,28 @@ var helmet = require('helmet');
 
 var session = require('express-session');
 var passport = require('passport');
+
+var User = require('./models/user');
+var Schedule = require('./models/schedule');
+var Availability = require('./models/availability');
+var Candidate = require('./models/candidate');
+var Comment = require('./models/comment');
+
+User.sync().then(() => { //sync 関数というモデルに合わせてデータベースのテーブルを作成する関数
+  //予定がユーザーの従属エンティティであることを定義
+  Schedule.belongsTo(User, {foreignKey: 'createdBy'});
+  Schedule.sync();
+  //コメントがユーザーに従属していることの定義
+  Comment.belongsTo(User, {foreignKey: 'userId'});
+  Comment.sync();
+  //出欠がユーザーに従属している
+  Availability.belongsTo(User, {foreignKey: 'userId'});
+  Candidate.sync().then(() => {
+    Availability.belongsTo(Candidate, {foreignKey: 'candidateId'});
+    Availability.sync();
+  });
+
+})
 var GitHubStrategy = require('passport-github2').Strategy;
 
 var GITHUB_CLIENT_ID = '98976f31becfc3e9e1e6';
@@ -30,7 +52,12 @@ passport.use(new GitHubStrategy({
 },
   function (accessToken, refreshToken, profile, done) {
     process.nextTick(function () {
-      return done(null, profile);
+      User.upsert({
+        userId: profile.id,
+        username: profile.username
+      }).then(() => {
+        done(null, profile);
+      });
     });
   }
 ));
